@@ -25,6 +25,9 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
   List<QueueEntry> _filteredRecords = [];
   bool _isLoading = false;
   bool _isExporting = false;
+  int? _latestBatchNumber;
+  DateTime? _latestBatchStart;
+  bool _showOnlyLatestBatch = false;
   String _selectedFilter = 'all';
   String _selectedStatus = 'all';
   String _selectedPriority = 'all';
@@ -120,6 +123,35 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
       }
 
       if (_allRecords.isNotEmpty) {
+        final batchNumbers = _allRecords.map((e) => e.batchNumber);
+        final minBatch = batchNumbers.reduce((a, b) => a < b ? a : b);
+        final maxBatch = batchNumbers.reduce((a, b) => a > b ? a : b);
+
+        if (maxBatch > minBatch) {
+          final latestEntries = _allRecords
+              .where((e) => e.batchNumber == maxBatch)
+              .toList();
+
+          if (latestEntries.isNotEmpty) {
+            final startTime = latestEntries
+                .map((e) => e.timestamp)
+                .reduce((a, b) => a.isBefore(b) ? a : b);
+            _latestBatchNumber = maxBatch;
+            _latestBatchStart = startTime;
+          } else {
+            _latestBatchNumber = null;
+            _latestBatchStart = null;
+          }
+        } else {
+          _latestBatchNumber = null;
+          _latestBatchStart = null;
+        }
+      } else {
+        _latestBatchNumber = null;
+        _latestBatchStart = null;
+      }
+
+      if (_allRecords.isNotEmpty) {
         print(
           'Records View: First record: ${_allRecords.first.name} - ${_allRecords.first.department}',
         );
@@ -207,6 +239,12 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
             return false;
           }
         }
+      }
+
+      if (_showOnlyLatestBatch &&
+          _latestBatchNumber != null &&
+          entry.batchNumber != _latestBatchNumber) {
+        return false;
       }
 
       // Search filter
@@ -415,6 +453,16 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
+            if (_latestBatchStart != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Cut off this day: ${_formatDate(_latestBatchStart!)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [
@@ -427,7 +475,7 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
                 ),
                 Expanded(
                   child: _buildStatItem(
-                    'Priority',
+                    'All Priority',
                     _statistics['priority'] ?? 0,
                     Colors.green,
                   ),
@@ -582,6 +630,30 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            if (_latestBatchNumber != null)
+              Row(
+                children: [
+                  Switch(
+                    value: _showOnlyLatestBatch,
+                    onChanged: (value) {
+                      setState(() {
+                        _showOnlyLatestBatch = value;
+                        _applyFilters();
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _latestBatchStart != null
+                          ? 'Show only new queue after cut off (${_formatDate(_latestBatchStart!)})'
+                          : 'Show only new queue after cut off',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -732,7 +804,7 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
 
   List<DropdownMenuItem<String>> _getPriorityOptions() {
     final items = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(value: 'all', child: Text('All Priorities')),
+      const DropdownMenuItem(value: 'all', child: Text('All')),
     ];
 
     // Add priority types that exist in the database

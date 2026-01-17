@@ -309,28 +309,20 @@ class BluetoothTtsService {
     return _departmentDevices[department];
   }
 
-  /// Announce queue number via device speakers (TTS)
-  /// This will speak: "You're next, the number of you, please be ready"
-  /// Uses device speakers by default, Bluetooth is optional
-  /// Announce that someone is next in queue
-  /// ONLY announces on the specific department's Bluetooth speaker (department-specific)
   Future<void> announceQueueNumber(String department, int queueNumber, {String? name}) async {
     try {
-      // Build announcement message
+      final deptName = _getDepartmentName(department);
       String message;
       if (name != null && name.isNotEmpty) {
-        message = "Attention $name, you're next. Queue number $queueNumber, please be ready.";
+        message = "Attention $name for $deptName, queue number $queueNumber, please be ready.";
       } else {
-        message = "Queue number $queueNumber, you're next. Please be ready.";
+        message = "Queue number $queueNumber for $deptName, please be ready.";
       }
 
-      // ONLY send to this specific department's Bluetooth device
-      // This ensures CAS announcements only go to CAS Bluetooth speaker, not other departments
       if (_departmentConnected[department] == true) {
         final characteristic = _departmentCharacteristics[department];
         if (characteristic != null) {
           try {
-            // Send text ONLY to this department's Bluetooth device
             final bytes = message.codeUnits;
             if (characteristic.properties.write) {
               await characteristic.write(bytes, withoutResponse: false);
@@ -338,17 +330,15 @@ class BluetoothTtsService {
               await characteristic.write(bytes, withoutResponse: true);
             }
             debugPrint('Next in queue announcement sent to $department Bluetooth device only');
-            return; // Successfully sent to department's Bluetooth speaker only
+            return;
           } catch (e) {
             debugPrint('Bluetooth device announcement failed for $department: $e');
-            // Don't use fallback - only announce on department's Bluetooth speaker
             return;
           }
         }
       }
       
       debugPrint('No Bluetooth device connected for $department - next in queue announcement skipped');
-      // Only announce if Bluetooth is connected for this specific department
     } catch (e) {
       print('Error announcing queue number for $department: $e');
     }
@@ -367,7 +357,6 @@ class BluetoothTtsService {
     }
   }
 
-  /// Announce system startup message
   Future<void> announceStartup() async {
     try {
       await _speakWithTts("Queue Management System is ready. Welcome to Registrar!");
@@ -376,20 +365,15 @@ class BluetoothTtsService {
     }
   }
 
-  /// Announce when department admin starts the countdown
-  /// Only announces on the specific department's Bluetooth speaker (department-specific)
   Future<void> announceDepartmentStart(String department) async {
     try {
       final deptName = _getDepartmentName(department);
       final message = "$deptName department is now starting. Queue management system is active.";
 
-      // ONLY send to this specific department's Bluetooth device
-      // This ensures CAS announcements only go to CAS Bluetooth speaker, not other departments
       if (_departmentConnected[department] == true) {
         final characteristic = _departmentCharacteristics[department];
         if (characteristic != null) {
           try {
-            // Send text ONLY to this department's Bluetooth device
             final bytes = message.codeUnits;
             if (characteristic.properties.write) {
               await characteristic.write(bytes, withoutResponse: false);
@@ -397,23 +381,20 @@ class BluetoothTtsService {
               await characteristic.write(bytes, withoutResponse: true);
             }
             debugPrint('Department start announcement sent to $department Bluetooth device only');
-            return; // Successfully sent to department's Bluetooth speaker only
+            return;
           } catch (e) {
             debugPrint('Bluetooth device announcement failed for $department: $e');
-            // Don't use fallback - only announce on department's Bluetooth speaker
             return;
           }
         }
       }
       
       debugPrint('No Bluetooth device connected for $department - announcement skipped');
-      // Only announce if Bluetooth is connected for this specific department
     } catch (e) {
       print('Error announcing department start for $department: $e');
     }
   }
 
-  /// Get department full name from code
   String _getDepartmentName(String code) {
     final deptNames = {
       'CAS': 'College of Arts and Sciences',
@@ -426,25 +407,20 @@ class BluetoothTtsService {
     return deptNames[code] ?? code;
   }
 
-  /// Announce that someone is being called
-  /// ONLY announces on the specific department's Bluetooth speaker (department-specific)
   Future<void> announceCalling(String department, int queueNumber, {String? name}) async {
-    // Build announcement message
+    final deptName = _getDepartmentName(department);
     String message;
     if (name != null && name.isNotEmpty) {
-      message = "Calling $name, queue number $queueNumber. Please proceed to the counter.";
+      message = "Calling $name for $deptName, queue number $queueNumber. Please proceed to the counter.";
     } else {
-      message = "Calling queue number $queueNumber. Please proceed to the counter.";
+      message = "Calling queue number $queueNumber for $deptName. Please proceed to the counter.";
     }
 
     try {
-      // ONLY send to this specific department's Bluetooth device
-      // This ensures CAS announcements only go to CAS Bluetooth speaker, not other departments
       if (_departmentConnected[department] == true) {
         final characteristic = _departmentCharacteristics[department];
         if (characteristic != null) {
           try {
-            // Send text ONLY to this department's Bluetooth device
             final bytes = message.codeUnits;
             if (characteristic.properties.write) {
               await characteristic.write(bytes, withoutResponse: false);
@@ -452,29 +428,25 @@ class BluetoothTtsService {
               await characteristic.write(bytes, withoutResponse: true);
             }
             debugPrint('Calling announcement sent to $department Bluetooth device only');
-            return; // Successfully sent to department's Bluetooth speaker only
+            return;
           } catch (e) {
             debugPrint('Bluetooth device announcement failed for $department: $e');
-            // Don't use fallback - only announce on department's Bluetooth speaker
             return;
           }
         }
       }
       
       debugPrint('No Bluetooth device connected for $department - calling announcement skipped');
-      // Only announce if Bluetooth is connected for this specific department
     } catch (e) {
       print('Error announcing calling for $department: $e');
     }
   }
 
-  /// Announce completion of a queue number
-  /// Uses department's Bluetooth speaker if connected, otherwise uses device TTS
   Future<void> announceCompletion(String department, String queueNumber) async {
     try {
-      final message = "Queue number $queueNumber is completed.";
+      final deptName = _getDepartmentName(department);
+      final message = "Queue number $queueNumber for $deptName is completed.";
 
-      // Try Bluetooth first if connected
       if (_departmentConnected[department] == true) {
         final characteristic = _departmentCharacteristics[department];
         if (characteristic != null) {
@@ -486,32 +458,57 @@ class BluetoothTtsService {
               await characteristic.write(bytes, withoutResponse: true);
             }
             debugPrint('Completion announcement sent to $department Bluetooth device');
-            // Also use TTS as backup
             await _speakWithTts(message);
             return;
           } catch (e) {
             debugPrint('Bluetooth completion announcement failed for $department: $e');
-            // Fall through to TTS fallback
           }
         }
       }
       
-      // Fallback to device TTS if Bluetooth not connected
       await _speakWithTts(message);
     } catch (e) {
       print('Error announcing completion for $department: $e');
     }
   }
 
-  /// Announce that someone is next in queue
-  /// Uses department's Bluetooth speaker if connected, otherwise uses device TTS
+  Future<void> announceMissed(String department, String queueNumber) async {
+    try {
+      final deptName = _getDepartmentName(department);
+      final message = "Queue number $queueNumber for $deptName is missed.";
+
+      if (_departmentConnected[department] == true) {
+        final characteristic = _departmentCharacteristics[department];
+        if (characteristic != null) {
+          try {
+            final bytes = message.codeUnits;
+            if (characteristic.properties.write) {
+              await characteristic.write(bytes, withoutResponse: false);
+            } else if (characteristic.properties.writeWithoutResponse) {
+              await characteristic.write(bytes, withoutResponse: true);
+            }
+            debugPrint('Missed announcement sent to $department Bluetooth device');
+            await _speakWithTts(message);
+            return;
+          } catch (e) {
+            debugPrint('Bluetooth missed announcement failed for $department: $e');
+          }
+        }
+      }
+
+      await _speakWithTts(message);
+    } catch (e) {
+      print('Error announcing missed for $department: $e');
+    }
+  }
+
   Future<void> announceNext(String department, String queueNumber, {String? name}) async {
     try {
+      final deptName = _getDepartmentName(department);
       final message = name != null && name.isNotEmpty
-          ? "Queue number $queueNumber, $name, you're next."
-          : "Queue number $queueNumber, you're next.";
+          ? "Queue number $queueNumber for $deptName, $name, you're next."
+          : "Queue number $queueNumber for $deptName, you're next.";
 
-      // Try Bluetooth first if connected
       if (_departmentConnected[department] == true) {
         final characteristic = _departmentCharacteristics[department];
         if (characteristic != null) {
@@ -523,32 +520,27 @@ class BluetoothTtsService {
               await characteristic.write(bytes, withoutResponse: true);
             }
             debugPrint('Next announcement sent to $department Bluetooth device');
-            // Also use TTS as backup
             await _speakWithTts(message);
             return;
           } catch (e) {
             debugPrint('Bluetooth next announcement failed for $department: $e');
-            // Fall through to TTS fallback
           }
         }
       }
       
-      // Fallback to device TTS if Bluetooth not connected
       await _speakWithTts(message);
     } catch (e) {
       print('Error announcing next for $department: $e');
     }
   }
 
-  /// Announce that someone should be ready
-  /// Uses department's Bluetooth speaker if connected, otherwise uses device TTS
   Future<void> announceReady(String department, String queueNumber, {String? name}) async {
     try {
+      final deptName = _getDepartmentName(department);
       final message = name != null && name.isNotEmpty
-          ? "Queue number $queueNumber, $name, please be ready."
-          : "Queue number $queueNumber, please be ready.";
+          ? "Queue number $queueNumber for $deptName, $name, please be ready."
+          : "Queue number $queueNumber for $deptName, please be ready.";
 
-      // Try Bluetooth first if connected
       if (_departmentConnected[department] == true) {
         final characteristic = _departmentCharacteristics[department];
         if (characteristic != null) {
@@ -560,36 +552,30 @@ class BluetoothTtsService {
               await characteristic.write(bytes, withoutResponse: true);
             }
             debugPrint('Ready announcement sent to $department Bluetooth device');
-            // Also use TTS as backup
             await _speakWithTts(message);
             return;
           } catch (e) {
             debugPrint('Bluetooth ready announcement failed for $department: $e');
-            // Fall through to TTS fallback
           }
         }
       }
       
-      // Fallback to device TTS if Bluetooth not connected
       await _speakWithTts(message);
     } catch (e) {
       print('Error announcing ready for $department: $e');
     }
   }
 
-  /// Announce when user successfully joins the queue
-  /// Uses device TTS to announce the queue number
   Future<void> announceQueueJoined(String department, int queueNumber, {String? name}) async {
     try {
-      // Build announcement message
+      final deptName = _getDepartmentName(department);
       String message;
       if (name != null && name.isNotEmpty) {
-        message = "Queueing successful. $name, your queue number is $queueNumber.";
+        message = "Queueing successful in $deptName. $name, your queue number is $queueNumber.";
       } else {
-        message = "Queueing successful. Your queue number is $queueNumber.";
+        message = "Queueing successful in $deptName. Your queue number is $queueNumber.";
       }
 
-      // Try Bluetooth first (department-specific)
       if (_departmentConnected[department] == true) {
         final characteristic = _departmentCharacteristics[department];
         if (characteristic != null) {
@@ -604,19 +590,16 @@ class BluetoothTtsService {
             return;
           } catch (e) {
             debugPrint('Bluetooth announcement failed for $department: $e');
-            // Fall through to TTS fallback
           }
         }
       }
 
-      // Fallback to device TTS
       await _speakWithTts(message);
     } catch (e) {
       print('Error announcing queue joined: $e');
     }
   }
 
-  /// Stop any ongoing announcements
   Future<void> stopAnnouncement() async {
     if (_tts != null) {
       try {
@@ -627,10 +610,8 @@ class BluetoothTtsService {
     }
   }
 
-  /// Check if TTS is available on this platform
   bool get isTtsAvailable => _ttsAvailable;
 
-  /// Dispose resources
   void dispose() {
     _adapterStateSubscription?.cancel();
     for (final dept in _departmentDevices.keys) {
@@ -641,4 +622,3 @@ class BluetoothTtsService {
     _departmentConnected.clear();
   }
 }
-

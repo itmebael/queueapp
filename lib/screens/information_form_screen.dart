@@ -1934,6 +1934,14 @@ class _InformationFormScreenState extends State<InformationFormScreen>
                                             fontSize: 15,
                                           ),
                                         ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Prepare your PWD ID and Senior Citizen ID for verification.',
+                                          style: TextStyle(
+                                            color: Colors.green.shade700,
+                                            fontSize: 14,
+                                          ),
+                                        ),
                                         const SizedBox(height: 10),
 
                                         // PWD Checkbox
