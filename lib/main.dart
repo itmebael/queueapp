@@ -12,19 +12,29 @@ import 'services/bluetooth_tts_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Start the app first, then initialize services in the background
+  // Start the app immediately - don't wait for anything
   runApp(const QueueManagementApp());
 
-  // Initialize services asynchronously (non-blocking)
-  _initializeServices();
+  // Initialize services asynchronously in the background (non-blocking)
+  // Use unawaited to ensure it doesn't block
+  _initializeServices().catchError((error) {
+    print('Background initialization error: $error');
+    // App continues to work even if initialization fails
+  });
 }
 
 Future<void> _initializeServices() async {
   try {
-    // Initialize Supabase
-    await SupabaseService().initialize();
+    // Initialize Supabase with timeout
+    await SupabaseService().initialize().timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        print('Supabase initialization timed out - continuing anyway');
+      },
+    );
   } catch (e) {
     print('Error initializing Supabase: $e');
+    // Continue even if Supabase fails - app should still work
   }
 
   try {

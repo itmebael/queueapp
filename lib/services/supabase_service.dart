@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/supabase_config.dart';
 import '../models/queue_entry.dart';
@@ -18,13 +19,34 @@ class SupabaseService {
 
   // Initialize Supabase
   Future<void> initialize() async {
-    await Supabase.initialize(
-      url: SupabaseConfig.supabaseUrl,
-      anonKey: SupabaseConfig.supabaseAnonKey,
-    );
-    _supabase = Supabase.instance.client;
-    await _migrateStatus();
-    await _loadCurrentBatchNumber();
+    try {
+      await Supabase.initialize(
+        url: SupabaseConfig.supabaseUrl,
+        anonKey: SupabaseConfig.supabaseAnonKey,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Supabase initialization timed out after 10 seconds');
+        },
+      );
+      _supabase = Supabase.instance.client;
+      
+      // Run migrations with timeout
+      try {
+        await _migrateStatus().timeout(const Duration(seconds: 5));
+      } catch (e) {
+        print('Status migration timed out or failed: $e');
+      }
+      
+      try {
+        await _loadCurrentBatchNumber().timeout(const Duration(seconds: 5));
+      } catch (e) {
+        print('Loading batch number timed out or failed: $e');
+      }
+    } catch (e) {
+      print('Supabase initialization error: $e');
+      rethrow;
+    }
   }
 
   Future<void> _migrateStatus() async {
