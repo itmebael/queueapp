@@ -12,23 +12,52 @@ import 'services/bluetooth_tts_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Supabase
-  await SupabaseService().initialize();
+  // Start the app first, then initialize services in the background
+  runApp(const QueueManagementApp());
 
-  // Initialize departments, purposes, courses, and admin services
-  await DepartmentService().initializeDefaultDepartments();
-  await PurposeService().initializeDefaultPurposes();
-  await CourseService().initializeDefaultCourses();
-  AdminService().initializeDefaultAdmins();
+  // Initialize services asynchronously (non-blocking)
+  _initializeServices();
+}
 
-  // Initialize SMS notifications
-  QueueNotificationService().initialize();
+Future<void> _initializeServices() async {
+  try {
+    // Initialize Supabase
+    await SupabaseService().initialize();
+  } catch (e) {
+    print('Error initializing Supabase: $e');
+  }
 
-  // Initialize Bluetooth TTS service
-  await BluetoothTtsService().initialize();
+  try {
+    // Initialize departments, purposes, courses, and admin services
+    await DepartmentService().initializeDefaultDepartments();
+    await PurposeService().initializeDefaultPurposes();
+    await CourseService().initializeDefaultCourses();
+    AdminService().initializeDefaultAdmins();
+  } catch (e) {
+    print('Error initializing default data: $e');
+  }
 
-  // Announce system startup - welcome message
-  await BluetoothTtsService().announceStartup();
+  try {
+    // Initialize SMS notifications
+    QueueNotificationService().initialize();
+  } catch (e) {
+    print('Error initializing SMS notifications: $e');
+  }
+
+  try {
+    // Initialize Bluetooth TTS service (may fail on web, that's okay)
+    await BluetoothTtsService().initialize();
+    
+    // Announce system startup - welcome message (only if Bluetooth initialized)
+    try {
+      await BluetoothTtsService().announceStartup();
+    } catch (e) {
+      // Silently fail - TTS might not be available on web
+      print('TTS announcement skipped: $e');
+    }
+  } catch (e) {
+    print('Bluetooth TTS initialization skipped (expected on web): $e');
+  }
 
   // Start periodic cleanup of old entries and missed entries
   Timer.periodic(const Duration(minutes: 5), (timer) async {
@@ -40,8 +69,6 @@ void main() async {
       print('Error in periodic cleanup: $e');
     }
   });
-
-  runApp(const QueueManagementApp());
 }
 
 class QueueManagementApp extends StatelessWidget {
