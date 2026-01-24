@@ -55,7 +55,7 @@ class SmsService {
       print('🔍 Debug: From: ${SmsConfig.twilioPhoneNumber}');
       print('🔍 Debug: Message: $message');
 
-      final url =
+      const url =
           'https://api.twilio.com/2010-04-01/Accounts/${SmsConfig.twilioAccountSid}/Messages.json';
 
       final response = await http.post(
@@ -95,7 +95,7 @@ class SmsService {
     try {
       // This is a simplified AWS SNS implementation
       // In production, you'd want to use the AWS SDK for Dart
-      final url = 'https://sns.${SmsConfig.awsRegion}.amazonaws.com/';
+      const url = 'https://sns.${SmsConfig.awsRegion}.amazonaws.com/';
 
       // Create AWS signature (simplified)
       final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
@@ -253,7 +253,7 @@ class SmsService {
     print('================');
 
     // Simulate network delay
-    await Future.delayed(Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 500));
     return true;
   }
 
@@ -389,7 +389,7 @@ class SmsService {
   // Split long messages
   List<String> splitLongMessage(String message) {
     final messages = <String>[];
-    final maxLength = SmsConfig.maxMessageLength;
+    const maxLength = SmsConfig.maxMessageLength;
 
     while (message.length > maxLength) {
       // Find the last space within the limit

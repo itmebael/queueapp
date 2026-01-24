@@ -75,7 +75,7 @@ void main() async {
 
   // Test 4: Message Length Handling
   print('\n=== Test 4: Message Length Handling ===');
-  final longMessage =
+  const longMessage =
       'This is a very long message that exceeds the standard SMS length limit of 160 characters. It should be automatically split into multiple messages if needed. This is useful for sending detailed notifications to users.';
 
   final isTooLong = smsService.isMessageTooLong(longMessage);

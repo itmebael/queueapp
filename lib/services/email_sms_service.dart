@@ -56,7 +56,7 @@ class EmailSmsService {
       print('🔍 Debug: Email data: $emailData');
 
       // Simulate real email sending
-      await Future.delayed(Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 500));
 
       print('✅ Real email sent to: $emailGateway');
       print('📱 SMS should be delivered to: $phoneNumber');

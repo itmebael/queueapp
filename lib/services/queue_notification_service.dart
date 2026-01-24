@@ -217,7 +217,7 @@ class QueueNotificationService {
         }
 
         // Send regular reminders for Top 5 users every 8 minutes (more frequent)
-        if (position <= 5 && timeSinceLastReminder >= Duration(minutes: 8)) {
+        if (position <= 5 && timeSinceLastReminder >= const Duration(minutes: 8)) {
           final waitTime = DateTime.now().difference(entry.timestamp);
 
           if (waitTime.inMinutes >= 8) {
@@ -226,12 +226,12 @@ class QueueNotificationService {
             _lastReminderSent[entry.id] = DateTime.now();
 
             // Add delay to avoid overwhelming the SMS service
-            await Future.delayed(Duration(milliseconds: 500));
+            await Future.delayed(const Duration(milliseconds: 500));
           }
         }
 
         // Send regular reminders for others every 20 minutes (less frequent)
-        if (position > 10 && timeSinceLastReminder >= Duration(minutes: 20)) {
+        if (position > 10 && timeSinceLastReminder >= const Duration(minutes: 20)) {
           final waitTime = DateTime.now().difference(entry.timestamp);
 
           if (waitTime.inMinutes >= 20) {
@@ -239,7 +239,7 @@ class QueueNotificationService {
             _lastReminderSent[entry.id] = DateTime.now();
 
             // Add delay to avoid overwhelming the SMS service
-            await Future.delayed(Duration(milliseconds: 500));
+            await Future.delayed(const Duration(milliseconds: 500));
           }
         }
       }
@@ -261,7 +261,7 @@ class QueueNotificationService {
 
   // Start the reminder timer
   void _startReminderTimer() {
-    _reminderTimer = Timer.periodic(Duration(minutes: 2), (timer) {
+    _reminderTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
       sendReminders();
     });
   }
@@ -297,7 +297,7 @@ class QueueNotificationService {
       results[entry.id] = success;
 
       // Add delay between notifications
-      await Future.delayed(Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 200));
     }
 
     return results;
@@ -306,7 +306,7 @@ class QueueNotificationService {
   // Test SMS functionality
   Future<bool> testSms(String phoneNumber) async {
     try {
-      final testMessage =
+      const testMessage =
           'This is a test SMS from your queue app. If you receive this, SMS is working correctly!';
       return await _smsService.sendSms(
         phoneNumber: phoneNumber,
@@ -346,14 +346,14 @@ class QueueNotificationService {
         (e) => e.id == entry.id,
       );
 
-      if (userPosition == -1) return Duration(seconds: 10); // Default fallback
+      if (userPosition == -1) return const Duration(seconds: 10); // Default fallback
 
       // Estimate: 2 seconds per person ahead + 5 seconds base time
       final estimatedSeconds = (userPosition * 2) + 5;
       return Duration(seconds: estimatedSeconds);
     } catch (e) {
       print('Error calculating wait time: $e');
-      return Duration(seconds: 10); // Default fallback
+      return const Duration(seconds: 10); // Default fallback
     }
   }
 

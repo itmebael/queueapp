@@ -37,7 +37,7 @@ class SupabaseConfig {
   static const String statusServing = 'current';
   static const String statusCompleted = 'done';
   static const String statusCancelled = 'cancelled';
-  static const String statusMissed = 'missed';
+  static const String statusMissed = 'incomplete';
 
   // Countdown column names
   static const String countdownStartColumn = 'countdown_start';

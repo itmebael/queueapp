@@ -68,7 +68,7 @@ class _DepartmentManagementScreenState
           'waiting': deptStats['waiting'] ?? 0,
           'current': deptStats['current'] ?? 0,
           'completed': deptStats['completed'] ?? 0,
-          'missed': deptStats['missed'] ?? 0,
+          'incomplete': deptStats['missed'] ?? deptStats['incomplete'] ?? 0,
           'total': deptStats['total'] ?? 0,
         };
       }
@@ -471,7 +471,7 @@ class _DepartmentManagementScreenState
       'waiting': 0,
       'current': 0,
       'completed': 0,
-      'missed': 0,
+      'incomplete': 0,
       'total': 0,
     };
 
@@ -497,10 +497,10 @@ class _DepartmentManagementScreenState
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
+                      gradient: const LinearGradient(
                         colors: [
-                          const Color(0xFF263277),
-                          const Color(0xFF4A90E2),
+                          Color(0xFF263277),
+                          Color(0xFF4A90E2),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(20),
@@ -584,8 +584,8 @@ class _DepartmentManagementScreenState
                     ),
                     _buildStatItem(
                       Icons.cancel,
-                      'Missed',
-                      stats['missed']!.toString(),
+                      'Incomplete',
+                      stats['incomplete']!.toString(),
                       Colors.red,
                     ),
                   ],

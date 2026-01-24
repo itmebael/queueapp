@@ -592,7 +592,7 @@ class ExcelExportService {
       int waitingRecords = allEntries
           .where((e) => e.status == 'waiting')
           .length;
-      int missedRecords = allEntries.where((e) => e.status == 'missed').length;
+      int missedRecords = allEntries.where((e) => e.status == 'missed' || e.status == 'incomplete').length;
 
       return {
         'total': totalRecords,
@@ -601,7 +601,7 @@ class ExcelExportService {
         'senior': seniorRecords,
         'completed': completedRecords,
         'waiting': waitingRecords,
-        'missed': missedRecords,
+        'incomplete': missedRecords,
       };
     } catch (e) {
       print('Error getting export statistics: $e');

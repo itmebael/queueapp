@@ -461,7 +461,7 @@ class _BluetoothDeviceScreenState extends State<BluetoothDeviceScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.bluetooth, color: const Color(0xFF263277)),
+                      const Icon(Icons.bluetooth, color: Color(0xFF263277)),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(

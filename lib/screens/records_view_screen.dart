@@ -5,6 +5,7 @@ import '../services/supabase_service.dart';
 import '../services/excel_export_service.dart';
 import '../services/department_service.dart';
 import '../services/purpose_service.dart';
+import '../constants/supabase_config.dart';
 
 class RecordsViewScreen extends StatefulWidget {
   final AdminUser currentAdmin;
@@ -116,10 +117,24 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
         
         _allRecords = response.map((json) => QueueEntry.fromJson(json)).toList();
         print('Records View (${widget.currentAdmin.department}): Loaded ${_allRecords.length} department records');
+        
+        // Debug status counts
+        final statusCounts = <String, int>{};
+        for (var r in _allRecords) {
+          statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
+        }
+        print('Status distribution for ${widget.currentAdmin.department}: $statusCounts');
       } else {
         // Master admin - load all records
         _allRecords = await _supabaseService.getAllQueueEntries();
         print('Records View (Master): Loaded ${_allRecords.length} records');
+        
+        // Debug status counts
+        final statusCounts = <String, int>{};
+        for (var r in _allRecords) {
+          statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
+        }
+        print('Status distribution (ALL): $statusCounts');
       }
 
       if (_allRecords.isNotEmpty) {
@@ -177,14 +192,28 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
   void _calculateStatistics() {
     int totalRecords = _allRecords.length;
     int priorityRecords = _allRecords.where((e) => e.isPriority).length;
-    int completedRecords = _allRecords.where((e) => e.status == 'completed').length;
-    int waitingRecords = _allRecords.where((e) => e.status == 'waiting').length;
+    int completedRecords = _allRecords
+        .where((e) =>
+            e.status == SupabaseConfig.statusCompleted ||
+            e.status == 'completed' ||
+            e.status == 'done')
+        .length;
+    int waitingRecords = _allRecords
+        .where((e) => e.status == SupabaseConfig.statusWaiting)
+        .length;
+    int incompleteRecords = _allRecords
+        .where((e) =>
+            e.status == SupabaseConfig.statusMissed ||
+            e.status == 'incomplete' ||
+            e.status == 'missed')
+        .length;
 
     _statistics = {
       'total': totalRecords,
       'priority': priorityRecords,
       'completed': completedRecords,
       'waiting': waitingRecords,
+      'incomplete': incompleteRecords,
     };
   }
 
@@ -196,8 +225,18 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
       }
 
       // Status filter
-      if (_selectedStatus != 'all' && entry.status != _selectedStatus) {
-        return false;
+      if (_selectedStatus != 'all') {
+        if (_selectedStatus == SupabaseConfig.statusMissed) {
+          if (entry.status != 'incomplete' && entry.status != 'missed' && entry.status != SupabaseConfig.statusMissed) {
+            return false;
+          }
+        } else if (_selectedStatus == SupabaseConfig.statusCompleted) {
+          if (entry.status != 'completed' && entry.status != 'done' && entry.status != SupabaseConfig.statusCompleted) {
+            return false;
+          }
+        } else if (entry.status != _selectedStatus) {
+          return false;
+        }
       }
 
       // Priority filter
@@ -494,6 +533,13 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
                     Colors.purple,
                   ),
                 ),
+                Expanded(
+                  child: _buildStatItem(
+                    'Incomplete',
+                    _statistics['incomplete'] ?? 0,
+                    Colors.red,
+                  ),
+                ),
               ],
             ),
           ],
@@ -582,7 +628,10 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
                         value: 'completed',
                         child: Text('Completed'),
                       ),
-                      DropdownMenuItem(value: 'missed', child: Text('Missed')),
+                      DropdownMenuItem(
+                        value: SupabaseConfig.statusMissed,
+                        child: Text('Incomplete'),
+                      ),
                     ],
                     (value) {
                       setState(() {
@@ -1013,7 +1062,7 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
               children: [
                 Icon(Icons.school, size: 16, color: Colors.grey[600]),
                 const SizedBox(width: 8),
-                Text('${entry.userType}'),
+                Text(entry.userType),
                 const SizedBox(width: 16),
                 Icon(Icons.description, size: 16, color: Colors.grey[600]),
                 const SizedBox(width: 8),
@@ -1059,22 +1108,30 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
 
   Widget _buildStatusChip(String status) {
     Color color;
-    switch (status) {
+    final lowerStatus = status.toLowerCase();
+    switch (lowerStatus) {
       case 'waiting':
         color = Colors.orange;
         break;
       case 'current':
+      case 'serving':
         color = Colors.blue;
         break;
       case 'completed':
+      case 'done':
         color = Colors.green;
         break;
+      case 'incomplete':
       case 'missed':
         color = Colors.red;
         break;
       default:
         color = Colors.grey;
     }
+
+    String displayStatus = status;
+    if (lowerStatus == 'missed') displayStatus = 'INCOMPLETE';
+    if (lowerStatus == 'done') displayStatus = 'COMPLETED';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1084,7 +1141,7 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
         border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Text(
-        status.toUpperCase(),
+        displayStatus.toUpperCase(),
         style: TextStyle(
           color: color,
           fontSize: 12,

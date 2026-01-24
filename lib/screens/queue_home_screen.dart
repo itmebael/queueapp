@@ -162,23 +162,6 @@ class _QueueHomeScreenState extends State<QueueHomeScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    ShaderMask(
-                      shaderCallback: (bounds) => const LinearGradient(
-                        colors: [Color(0xFF263277), Color(0xFF4A90E2)],
-                      ).createShader(bounds),
-                      child: Text(
-                        'Welcome to Queue!',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineLarge
-                            ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -845,8 +828,8 @@ class _QueueHomeScreenState extends State<QueueHomeScreen>
       width: double.infinity,
       height: 64,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [const Color(0xFF263277), const Color(0xFF4A90E2)],
+        gradient: const LinearGradient(
+          colors: [Color(0xFF263277), Color(0xFF4A90E2)],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [

@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:excel/excel.dart' hide Border;
 import '../models/admin_user.dart';
 import '../services/admin_service.dart';
 import 'admin_login_screen.dart';
 import '../models/queue_entry.dart';
 import '../services/supabase_service.dart';
-import '../widgets/countdown_timer.dart';
-import '../constants/supabase_config.dart';
 import 'analytics_screen.dart';
 import 'department_management_screen.dart';
 import 'purpose_management_screen.dart';
@@ -20,6 +15,7 @@ import '../services/purpose_service.dart';
 import '../models/department.dart';
 import '../services/queue_monitoring_service.dart';
 import '../services/bluetooth_tts_service.dart';
+import '../widgets/countdown_timer.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -40,8 +36,8 @@ class _AdminScreenState extends State<AdminScreen> {
   bool _showDashboard = true; // Show dashboard by default
   List<Department> _allDepartments = [];
   Map<String, Map<String, int>> _departmentStats = {};
-  List<Map<String, dynamic>> _purposeStatsByDeptCourse = []; // Purpose statistics by department and course
-  List<QueueEntry> _allQueueEntries = []; // All queue entries for download
+  List<Map<String, dynamic>> _purposeStatsByDeptCourse = [];
+  List<QueueEntry> _allQueueEntries = [];
 
   final SupabaseService _supabaseService = SupabaseService();
   final DepartmentService _departmentService = DepartmentService();
@@ -251,7 +247,7 @@ class _AdminScreenState extends State<AdminScreen> {
           'waiting': deptStats['waiting'] ?? 0,
           'current': deptStats['current'] ?? 0,
           'completed': deptStats['completed'] ?? 0,
-          'missed': deptStats['missed'] ?? 0,
+          'incomplete': deptStats['missed'] ?? deptStats['incomplete'] ?? 0,
           'total': deptStats['total'] ?? 0,
         };
       }
@@ -465,8 +461,12 @@ class _AdminScreenState extends State<AdminScreen> {
   Future<void> _stopCountdown() async {
     if (_currentAdmin == null || _currentPerson == null) return;
 
+    // Immediately update local state to hide timer and stop potential triggers
     setState(() {
       _isLoading = true;
+      if (_currentPerson != null) {
+        _currentPerson = _currentPerson!.copyWith(countdownStart: null);
+      }
     });
 
     try {
@@ -476,15 +476,67 @@ class _AdminScreenState extends State<AdminScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Countdown stopped for Queue #${_currentPerson!.queueNumber}',
+              'Countdown stopped for Queue #${_currentPerson!.queueNumber}. You can now finish serving.',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: Colors.blue,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
           ),
         );
+
+        await _loadDepartmentData();
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _markCurrentAsIncomplete() async {
+    if (_currentAdmin == null || _currentPerson == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final current = _currentPerson!;
+      final success = await _supabaseService.markAsMissed(current.id);
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Queue #${current.queueNumber} marked as incomplete',
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+
+        try {
+          await _bluetoothTtsService.announceIncomplete(
+            current.department,
+            current.queueNumber.toString().padLeft(3, '0'),
+          );
+        } catch (e) {
+          print('TTS incomplete announcement failed: $e');
+        }
 
         await _loadDepartmentData();
       }
@@ -770,24 +822,24 @@ class _AdminScreenState extends State<AdminScreen> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [const Color(0xFF263277), const Color(0xFF4A90E2)],
+              colors: [Color(0xFF263277), Color(0xFF4A90E2)],
             ),
           ),
           child: Column(
             children: [
               Row(
                 children: [
-                  CircleAvatar(
+                  const CircleAvatar(
                     radius: 24,
                     backgroundColor: Colors.white,
                     child: Icon(
                       Icons.admin_panel_settings_rounded,
                       size: 24,
-                      color: const Color(0xFF263277),
+                      color: Color(0xFF263277),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1103,8 +1155,8 @@ class _AdminScreenState extends State<AdminScreen> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [const Color(0xFF263277), const Color(0xFF4A90E2)],
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF263277), Color(0xFF4A90E2)],
                   ),
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -1132,20 +1184,31 @@ class _AdminScreenState extends State<AdminScreen> {
               duration: 30,
               startTime: _currentPerson!.countdownStart!,
               onComplete: () async {
-                if (_currentPerson != null) {
+                // Only proceed if the countdown is still active (not stopped by admin)
+                if (_currentPerson != null && _currentPerson!.countdownStart != null) {
+                  final person = _currentPerson!;
+                  print('Countdown finished for ${person.name}. Marking as incomplete.');
+                  
                   try {
-                    await _supabaseService.updateQueueEntryStatus(
-                      _currentPerson!.id,
-                      SupabaseConfig.statusMissed,
-                    );
-                    print(
-                      'User ${_currentPerson!.name} automatically removed from queue due to timeout',
-                    );
+                    // Automatically mark as incomplete in the database
+                    await _supabaseService.markAsMissed(person.id);
+                    
+                    // Announce incomplete via voice
+                    try {
+                      await _bluetoothTtsService.announceIncomplete(
+                        person.department,
+                        person.queueNumber.toString().padLeft(3, '0'),
+                      );
+                    } catch (ttsError) {
+                      debugPrint('TTS incomplete announcement failed: $ttsError');
+                    }
+
+                    // Reload the queue to move to the next person
+                    await _loadDepartmentData();
                   } catch (e) {
-                    print('Failed to remove user from queue: $e');
+                    print('Failed to auto-mark as incomplete: $e');
                   }
                 }
-                _loadDepartmentData();
               },
               onTick: () {
                 // Timer updates its own display, no need to rebuild entire widget
@@ -1156,31 +1219,17 @@ class _AdminScreenState extends State<AdminScreen> {
           const SizedBox(height: 20),
 
           if (_currentPerson!.status == 'waiting') ...[
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: !_isLoading ? _startCountdown : null,
-                icon: const Icon(Icons.timer_rounded),
-                label: const Text('Start Countdown'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-          ] else if (_currentPerson!.status == 'current') ...[
             Row(
               children: [
                 Expanded(
                   child: SizedBox(
                     height: 48,
                     child: ElevatedButton.icon(
-                      onPressed: !_isLoading ? _stopCountdown : null,
-                      icon: const Icon(Icons.stop_rounded),
-                      label: const Text('Complete'),
+                      onPressed: !_isLoading ? _startCountdown : null,
+                      icon: const Icon(Icons.timer_rounded),
+                      label: const Text('Start Countdown'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: Colors.blue,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -1191,18 +1240,11 @@ class _AdminScreenState extends State<AdminScreen> {
                   child: SizedBox(
                     height: 48,
                     child: ElevatedButton.icon(
-                      onPressed: !_isLoading
-                          ? () async {
-                              await _supabaseService.markAsMissed(
-                                _currentPerson!.id,
-                              );
-                              await _loadDepartmentData();
-                            }
-                          : null,
-                      icon: const Icon(Icons.skip_next_rounded),
-                      label: const Text('Skip'),
+                      onPressed: !_isLoading ? _finishServing : null,
+                      icon: const Icon(Icons.check_circle_rounded),
+                      label: const Text('Complete'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
+                        backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -1210,35 +1252,100 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
               ],
             ),
-          ],
-
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: _currentPerson != null && !_isLoading
-                        ? _finishServing
-                        : null,
-                    icon: const Icon(Icons.check_circle_rounded),
-                    label: const Text('Finish'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF263277),
-                      foregroundColor: Colors.white,
+          ] else if (_currentPerson!.status == 'current') ...[
+            if (_currentPerson!.countdownStart != null) ...[
+              // Show Stop Countdown, Complete, and Incomplete when timer is running
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: !_isLoading ? _stopCountdown : null,
+                        icon: const Icon(Icons.timer_off_rounded),
+                        label: const Text('Stop Countdown'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: !_isLoading ? _finishServing : null,
+                        icon: const Icon(Icons.check_circle_rounded),
+                        label: const Text('Complete'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: !_isLoading ? _markCurrentAsIncomplete : null,
+                        icon: const Icon(Icons.cancel_rounded),
+                        label: const Text('Incomplete'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
+            ] else ...[
+              // Normal serving buttons when countdown is not active
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: !_isLoading ? _finishServing : null,
+                        icon: const Icon(Icons.check_circle_rounded),
+                        label: const Text('Complete'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: !_isLoading ? _markCurrentAsIncomplete : null,
+                        icon: const Icon(Icons.cancel_rounded),
+                        label: const Text('Incomplete'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               SizedBox(
+                width: double.infinity,
                 height: 48,
                 child: ElevatedButton.icon(
                   onPressed: !_isLoading ? _resetQueue : null,
                   icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Reset'),
+                  label: const Text('Reset Queue'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
@@ -1246,7 +1353,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
               ),
             ],
-          ),
+          ],
         ],
       ),
     );
@@ -1294,7 +1401,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('🔥', style: TextStyle(fontSize: 14)),
+                      const Text('🔥', style: TextStyle(fontSize: 14)),
                       const SizedBox(width: 4),
                       Text(
                         'Top 6',
@@ -1417,7 +1524,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                   width: 1,
                                 ),
                               ),
-                              child: Text('🔥', style: TextStyle(fontSize: 10)),
+                              child: const Text('🔥', style: TextStyle(fontSize: 10)),
                             ),
                           ),
                       ],
@@ -1521,11 +1628,11 @@ class _AdminScreenState extends State<AdminScreen> {
       children: [
         Container(
           width: isTablet ? 240 : 280,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [const Color(0xFF263277), const Color(0xFF4A90E2)],
+              colors: [Color(0xFF263277), Color(0xFF4A90E2)],
             ),
           ),
           child: Column(
@@ -1684,10 +1791,10 @@ class _AdminScreenState extends State<AdminScreen> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                gradient: LinearGradient(
+                                gradient: const LinearGradient(
                                   colors: [
-                                    const Color(0xFF263277),
-                                    const Color(0xFF4A90E2),
+                                    Color(0xFF263277),
+                                    Color(0xFF4A90E2),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(20),
@@ -1712,10 +1819,60 @@ class _AdminScreenState extends State<AdminScreen> {
                             _currentPerson!.priorityType,
                           ),
                         _buildInfoRow('Purpose', _currentPerson!.purpose),
+
+                        if (_currentPerson!.status == 'current' &&
+                            _currentPerson!.countdownStart != null) ...[
+                          const SizedBox(height: 16),
+                          CountdownTimer(
+                            duration: 30,
+                            startTime: _currentPerson!.countdownStart!,
+                            onComplete: () async {
+                              if (_currentPerson != null) {
+                                final person = _currentPerson!;
+                                print(
+                                  'Countdown finished for ${person.name}. Marking as incomplete.',
+                                );
+
+                                try {
+                                  // Automatically mark as incomplete in the database
+                                  await _supabaseService.markAsMissed(
+                                    person.id,
+                                  );
+
+                                  // Announce incomplete via voice
+                                  try {
+                                    await _bluetoothTtsService.announceIncomplete(
+                                      person.department,
+                                      person.queueNumber.toString().padLeft(
+                                        3,
+                                        '0',
+                                      ),
+                                    );
+                                  } catch (ttsError) {
+                                    debugPrint(
+                                      'TTS incomplete announcement failed: $ttsError',
+                                    );
+                                  }
+
+                                  // Reload the queue to move to the next person
+                                  await _loadDepartmentData();
+                                } catch (e) {
+                                  print(
+                                    'Failed to auto-mark as incomplete: $e',
+                                  );
+                                }
+                              }
+                            },
+                            onTick: () {
+                              // Timer updates its own display, no need to rebuild entire widget
+                            },
+                          ),
+                        ],
+
                         const SizedBox(height: 24),
                         Row(
                           children: [
-                            if (_currentPerson!.status == 'waiting')
+                            if (_currentPerson!.status == 'waiting') ...[
                               Expanded(
                                 child: ElevatedButton.icon(
                                   onPressed: !_isLoading
@@ -1729,13 +1886,13 @@ class _AdminScreenState extends State<AdminScreen> {
                                   ),
                                 ),
                               ),
-                            if (_currentPerson!.status == 'current') ...[
+                              const SizedBox(width: 16),
                               Expanded(
                                 child: ElevatedButton.icon(
                                   onPressed: !_isLoading
-                                      ? _stopCountdown
+                                      ? _finishServing
                                       : null,
-                                  icon: const Icon(Icons.stop_rounded),
+                                  icon: const Icon(Icons.check_circle_rounded),
                                   label: const Text('Complete'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.green,
@@ -1743,72 +1900,90 @@ class _AdminScreenState extends State<AdminScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: !_isLoading
-                                      ? () async {
-                                          final current = _currentPerson;
-                                          if (current == null) return;
-
-                                          await _supabaseService.markAsMissed(
-                                            current.id,
-                                          );
-
-                                          try {
-                                            await _bluetoothTtsService
-                                                .announceMissed(
-                                              current.department,
-                                              current.queueNumber
-                                                  .toString()
-                                                  .padLeft(3, '0'),
-                                            );
-                                          } catch (e) {
-                                            print(
-                                              'TTS missed announcement failed: $e',
-                                            );
-                                          }
-
-                                          await _loadDepartmentData();
-                                        }
-                                      : null,
-                                  icon: const Icon(Icons.skip_next_rounded),
-                                  label: const Text('Skip'),
+                            ],
+                            if (_currentPerson!.status == 'current') ...[
+                              if (_currentPerson!.countdownStart != null) ...[
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: !_isLoading
+                                        ? _stopCountdown
+                                        : null,
+                                    icon: const Icon(Icons.timer_off_rounded),
+                                    label: const Text('Stop Countdown'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: !_isLoading
+                                        ? _finishServing
+                                        : null,
+                                    icon: const Icon(Icons.check_circle_rounded),
+                                    label: const Text('Complete'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: !_isLoading
+                                        ? _markCurrentAsIncomplete
+                                        : null,
+                                    icon: const Icon(Icons.cancel_rounded),
+                                    label: const Text('Incomplete'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ] else ...[
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: !_isLoading
+                                        ? _finishServing
+                                        : null,
+                                    icon: const Icon(Icons.check_circle_rounded),
+                                    label: const Text('Complete'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: !_isLoading
+                                        ? _markCurrentAsIncomplete
+                                        : null,
+                                    icon: const Icon(Icons.cancel_rounded),
+                                    label: const Text('Incomplete'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                ElevatedButton.icon(
+                                  onPressed: !_isLoading ? _resetQueue : null,
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: const Text('Reset Queue'),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orange,
+                                    backgroundColor: Colors.red,
                                     foregroundColor: Colors.white,
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: _currentPerson != null && !_isLoading
-                                    ? _finishServing
-                                    : null,
-                                icon: const Icon(Icons.check_circle_rounded),
-                                label: const Text('Finish'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF263277),
-                                  foregroundColor: Colors.white,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            ElevatedButton.icon(
-                              onPressed: !_isLoading ? _resetQueue : null,
-                              icon: const Icon(Icons.refresh_rounded),
-                              label: const Text('Reset'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                              ),
-                            ),
                           ],
                         ),
                       ],
@@ -1974,7 +2149,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                                         width: 2,
                                                       ),
                                                     ),
-                                                    child: Text(
+                                                    child: const Text(
                                                       '🔥',
                                                       style: TextStyle(
                                                         fontSize: 12,
@@ -2100,24 +2275,24 @@ class _AdminScreenState extends State<AdminScreen> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [const Color(0xFF263277), const Color(0xFF4A90E2)],
+              colors: [Color(0xFF263277), Color(0xFF4A90E2)],
             ),
           ),
           child: Column(
             children: [
               Row(
                 children: [
-                  CircleAvatar(
+                  const CircleAvatar(
                     radius: 24,
                     backgroundColor: Colors.white,
                     child: Icon(
                       Icons.admin_panel_settings_rounded,
                       size: 24,
-                      color: const Color(0xFF263277),
+                      color: Color(0xFF263277),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -2162,11 +2337,11 @@ class _AdminScreenState extends State<AdminScreen> {
       children: [
         Container(
           width: isTablet ? 240 : 280,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [const Color(0xFF263277), const Color(0xFF4A90E2)],
+              colors: [Color(0xFF263277), Color(0xFF4A90E2)],
             ),
           ),
           child: Column(
@@ -2489,10 +2664,10 @@ class _AdminScreenState extends State<AdminScreen> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
+                      gradient: const LinearGradient(
                         colors: [
-                          const Color(0xFF263277),
-                          const Color(0xFF4A90E2),
+                          Color(0xFF263277),
+                          Color(0xFF4A90E2),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(20),

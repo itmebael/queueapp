@@ -257,7 +257,7 @@ class AnalyticsService {
           .where((e) => e.status == 'done' || e.status == 'completed')
           .length;
       final missedCount = filteredEntries
-          .where((e) => e.status == 'missed')
+          .where((e) => e.status == 'missed' || e.status == 'incomplete')
           .length;
 
       // Calculate average wait time
@@ -316,7 +316,7 @@ class AnalyticsService {
               'icon': '✅',
             },
             {
-              'label': 'Missed',
+              'label': 'Incomplete',
               'value': missedCount,
               'color': '#FF6B6B',
               'icon': '❌',
@@ -422,6 +422,7 @@ class AnalyticsService {
           'serving': servingCount,
           'completed': completedCount,
           'missed': missedCount,
+          'incomplete': missedCount,
           'avg_wait_time': avgWaitTime,
         },
         'graphs': graphData,
@@ -507,7 +508,7 @@ class AnalyticsService {
             'waiting': allEntries.where((e) => e.status == 'waiting').length,
             'serving': allEntries.where((e) => e.status == 'current' || e.status == 'serving').length,
             'completed': allEntries.where((e) => e.status == 'done' || e.status == 'completed').length,
-            'missed': allEntries.where((e) => e.status == 'missed').length,
+            'incomplete': allEntries.where((e) => e.status == 'missed' || e.status == 'incomplete').length,
             'avg_wait_time': 0.0,
           },
           'graphs': {
@@ -536,7 +537,7 @@ class AnalyticsService {
             'waiting': 0,
             'serving': 0,
             'completed': 0,
-            'missed': 0,
+            'incomplete': 0,
             'avg_wait_time': 0.0,
           },
           'graphs': <String, dynamic>{},
@@ -589,6 +590,7 @@ class AnalyticsService {
           'completed': 0,
           'waiting': 0,
           'serving': 0,
+          'incomplete': 0,
         };
       }
 
@@ -598,6 +600,10 @@ class AnalyticsService {
         case 'done':
         case 'completed':
           deptMap[entry.department]!['completed']++;
+          break;
+        case 'incomplete':
+        case 'missed':
+          deptMap[entry.department]!['incomplete']++;
           break;
         case 'waiting':
           deptMap[entry.department]!['waiting']++;
@@ -703,7 +709,7 @@ class AnalyticsService {
 
       // Penalize high missed rate
       final total = entries.length;
-      final missed = entries.where((e) => e.status == 'missed').length;
+      final missed = entries.where((e) => e.status == 'missed' || e.status == 'incomplete').length;
       if (total > 0) {
         final missedRate = missed / total * 100;
         if (missedRate > 10) score -= 15;
@@ -761,7 +767,7 @@ class AnalyticsService {
     }
 
     // Time-based insights
-    final hourlyStats = _getHourlyDistribution(entries);
+    final List<Map<String, dynamic>> hourlyStats = _getHourlyDistribution(entries);
     if (hourlyStats.isNotEmpty) {
       final peakHour = hourlyStats.reduce(
         (a, b) => (a['count'] as int) > (b['count'] as int) ? a : b,
@@ -823,7 +829,7 @@ class AnalyticsService {
       }
     }
     
-    print('_getTopCoursesUsage: Found ${entriesWithCourse} entries with courses, ${courseMap.length} unique courses');
+    print('_getTopCoursesUsage: Found $entriesWithCourse entries with courses, ${courseMap.length} unique courses');
     
     final result = courseMap.entries.map((entry) {
       return {

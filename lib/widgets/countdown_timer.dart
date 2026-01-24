@@ -101,43 +101,58 @@ class _CountdownTimerState extends State<CountdownTimer> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: _getProgressColor().withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _getProgressColor(), width: 2),
-      ),
-      child: Column(
-        children: [
-          // Progress bar
-          LinearProgressIndicator(
+    return Column(
+      children: [
+        // Progress bar (Countdown line)
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
             value: _getProgressValue(),
-            backgroundColor: Colors.grey.shade300,
+            backgroundColor: Colors.grey.shade200,
             valueColor: AlwaysStoppedAnimation<Color>(_getProgressColor()),
-            minHeight: 8,
+            minHeight: 10, // Made thicker for visibility
           ),
-          const SizedBox(height: 4),
-          // Time display
-          Text(
-            _formatTime(),
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: _getProgressColor(),
-            ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          decoration: BoxDecoration(
+            color: _getProgressColor().withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _getProgressColor().withOpacity(0.3), width: 1),
           ),
-          // Status text
-          Text(
-            _isExpired ? 'EXPIRED' : 'COUNTDOWN',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: _getProgressColor(),
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _isExpired ? Icons.timer_off_rounded : Icons.timer_rounded,
+                color: _getProgressColor(),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              // Time display
+              Text(
+                _formatTime(),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _getProgressColor(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Status text
+              Text(
+                _isExpired ? 'EXPIRED' : 'REMAINING',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _getProgressColor(),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

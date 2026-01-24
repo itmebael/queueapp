@@ -128,7 +128,7 @@ class WindowsTtsImpl implements TtsInterface {
       if (tempFile != null) {
         debugPrint('Windows TTS: Speaking "$text" via script: $tempFile');
         
-        final command = 'powershell';
+        const command = 'powershell';
         final args = [
           '-NoProfile',
           '-NonInteractive',
@@ -188,7 +188,7 @@ class WindowsTtsImpl implements TtsInterface {
         "`\$synthesizer.Volume = 100; "
         "`\$synthesizer.Speak('$escapedText');";
       
-      final command = 'powershell';
+      const command = 'powershell';
       final args = [
         '-NoProfile',
         '-NonInteractive',

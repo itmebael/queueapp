@@ -245,10 +245,10 @@ class _PurposeManagementScreenState extends State<PurposeManagementScreen> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [
-                        const Color(0xFF263277),
-                        const Color(0xFF4A90E2),
+                        Color(0xFF263277),
+                        Color(0xFF4A90E2),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(20),

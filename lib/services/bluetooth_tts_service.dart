@@ -130,7 +130,7 @@ class BluetoothTtsService {
         if (deviceId != null) {
           // Try to find the device
           try {
-            final devices = await FlutterBluePlus.connectedDevices;
+            final devices = FlutterBluePlus.connectedDevices;
             if (devices.isNotEmpty) {
               final device = devices.firstWhere(
                 (d) => d.remoteId.toString() == deviceId,
@@ -472,10 +472,10 @@ class BluetoothTtsService {
     }
   }
 
-  Future<void> announceMissed(String department, String queueNumber) async {
+  Future<void> announceIncomplete(String department, String queueNumber) async {
     try {
       final deptName = _getDepartmentName(department);
-      final message = "Queue number $queueNumber for $deptName is missed.";
+      final message = "Queue number $queueNumber for $deptName is incomplete.";
 
       if (_departmentConnected[department] == true) {
         final characteristic = _departmentCharacteristics[department];
@@ -487,18 +487,18 @@ class BluetoothTtsService {
             } else if (characteristic.properties.writeWithoutResponse) {
               await characteristic.write(bytes, withoutResponse: true);
             }
-            debugPrint('Missed announcement sent to $department Bluetooth device');
+            debugPrint('Incomplete announcement sent to $department Bluetooth device');
             await _speakWithTts(message);
             return;
           } catch (e) {
-            debugPrint('Bluetooth missed announcement failed for $department: $e');
+            debugPrint('Bluetooth incomplete announcement failed for $department: $e');
           }
         }
       }
 
       await _speakWithTts(message);
     } catch (e) {
-      print('Error announcing missed for $department: $e');
+      print('Error announcing incomplete for $department: $e');
     }
   }
 

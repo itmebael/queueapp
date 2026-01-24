@@ -1816,7 +1816,7 @@ class _InformationFormScreenState extends State<InformationFormScreen>
                                       ),
                                     ),
                                   );
-                                }).toList(),
+                                }),
                                 const DropdownMenuItem(
                                   value: 'Others',
                                   child: Text(

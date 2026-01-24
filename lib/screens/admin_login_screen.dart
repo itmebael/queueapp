@@ -157,54 +157,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
     }
   }
 
-  Future<void> _testDatabaseConnection() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final adminService = AdminService();
-      adminService.initializeDefaultAdmins();
-
-      final allAdmins = adminService.getAllAdmins();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Local authentication ready! Found ${allAdmins.length} admin users.',
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Local authentication test failed: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -244,9 +196,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.arrow_back_rounded,
-                                color: const Color(0xFF263277),
+                                color: Color(0xFF263277),
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
@@ -457,32 +409,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                               fontWeight: FontWeight.w600,
                                             ),
                                       ),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Test Database Connection button
-                          SizedBox(
-                            height: 48,
-                            child: OutlinedButton(
-                              onPressed: _testDatabaseConnection,
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(
-                                  color: Color(0xFF263277),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: Text(
-                                'Test Local Authentication',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: const Color(0xFF263277),
-                                      fontWeight: FontWeight.w600,
-                                    ),
                               ),
                             ),
                           ),

@@ -164,7 +164,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               key: ValueKey('analytics_${_refreshKey}_${_selectedDepartmentFilter}_${_selectedCourseFilter}_${_selectedPurposeFilter}_${_selectedMonth?.toString()}_${_selectedDay?.toString()}'),
               future: _analyticsService.getComprehensiveAnalytics(
                 department: isMasterAdmin 
-                    ? (_selectedDepartmentFilter ?? null) // Master admin can filter by any department or see all
+                    ? (_selectedDepartmentFilter) // Master admin can filter by any department or see all
                     : (dept != 'ALL' ? dept : null), // Department admin only sees their department
                 course: _selectedCourseFilter,
                 purpose: _selectedPurposeFilter,
@@ -430,11 +430,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 // Department header
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
                       colors: [Color(0xFF263277), Color(0xFF4A90E2)],
                     ),
-                    borderRadius: const BorderRadius.only(
+                    borderRadius: BorderRadius.only(
                       topLeft: Radius.circular(8),
                       topRight: Radius.circular(8),
                     ),
@@ -529,7 +529,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             ),
                             child: Center(
                               child: Text(
-                                '${entry.queueNumber.toString().padLeft(3, '0')}',
+                                entry.queueNumber.toString().padLeft(3, '0'),
                                 style: TextStyle(
                                   color: entry.isPriority
                                       ? Colors.green.shade700
@@ -686,7 +686,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       case 'serving':
         return Colors.blue;
       case 'completed':
+      case 'done':
         return Colors.green;
+      case 'incomplete':
       case 'missed':
         return Colors.red;
       default:
@@ -702,7 +704,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       case 'serving':
         return Icons.person_rounded;
       case 'completed':
+      case 'done':
         return Icons.check_circle_rounded;
+      case 'incomplete':
       case 'missed':
         return Icons.cancel_rounded;
       default:
@@ -1002,11 +1006,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.school_rounded, color: Color(0xFF263277)),
-              const SizedBox(width: 12),
-              const Text(
+              Icon(Icons.school_rounded, color: Color(0xFF263277)),
+              SizedBox(width: 12),
+              Text(
                 'Department Performance',
                 style: TextStyle(
                   fontSize: 18,
@@ -1176,11 +1180,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.book_rounded, color: Color(0xFF263277)),
-              const SizedBox(width: 12),
-              const Text(
+              Icon(Icons.book_rounded, color: Color(0xFF263277)),
+              SizedBox(width: 12),
+              Text(
                 'Top Courses Usage',
                 style: TextStyle(
                   fontSize: 18,
@@ -1353,10 +1357,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
-                  BoxShadow(
+                  const BoxShadow(
                     color: Colors.white,
                     blurRadius: 10,
-                    offset: const Offset(-5, -5),
+                    offset: Offset(-5, -5),
                   ),
                 ],
               ),

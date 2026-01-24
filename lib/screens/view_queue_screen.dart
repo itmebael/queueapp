@@ -502,7 +502,7 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
               switch (person.status) {
                 case 'done':
                   return Colors.green.shade700;
-                case 'missed':
+                case 'incomplete':
                   return Colors.red;
                 case 'current':
                   return Colors.green.shade600;
@@ -515,7 +515,7 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
             switch (person.status) {
               case 'done':
                 return Colors.green;
-              case 'missed':
+              case 'incomplete':
                 return Colors.red;
               case 'current':
                 return Colors.blue;
@@ -679,9 +679,9 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
       }
 
       rows.add(Row(
-        key: UniqueKey(), // Force fresh row creation to prevent 'child == _child' assertion
+        key: UniqueKey(),
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Force fresh row creation to prevent 'child == _child' assertion
         children: rowChildren,
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       ));
     }
 

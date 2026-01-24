@@ -18,7 +18,7 @@ class _SmsTestWidgetState extends State<SmsTestWidget> {
   String _selectedCarrier = 'Smart';
   bool _isLoading = false;
   String _testResult = '';
-  bool _smsEnabled = SmsConfig.enableSmsNotifications;
+  final bool _smsEnabled = SmsConfig.enableSmsNotifications;
 
   @override
   void initState() {

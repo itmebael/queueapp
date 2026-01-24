@@ -23,7 +23,47 @@ class SupabaseService {
       anonKey: SupabaseConfig.supabaseAnonKey,
     );
     _supabase = Supabase.instance.client;
+    await _migrateStatus();
     await _loadCurrentBatchNumber();
+  }
+
+  Future<void> _migrateStatus() async {
+    try {
+      print('🚀 Starting status migration in Supabase...');
+      // Migrate 'missed' to 'incomplete'
+      final missedUpdate = await _supabase
+          .from(SupabaseConfig.queueEntriesTable)
+          .update({SupabaseConfig.statusColumn: 'incomplete'})
+          .eq(SupabaseConfig.statusColumn, 'missed')
+          .select();
+      if (missedUpdate.isNotEmpty) {
+        print('✅ Migrated ${missedUpdate.length} records from "missed" to "incomplete"');
+      }
+
+      // Migrate 'serving' to 'current'
+      final servingUpdate = await _supabase
+          .from(SupabaseConfig.queueEntriesTable)
+          .update({SupabaseConfig.statusColumn: 'current'})
+          .eq(SupabaseConfig.statusColumn, 'serving')
+          .select();
+      if (servingUpdate.isNotEmpty) {
+        print('✅ Migrated ${servingUpdate.length} records from "serving" to "current"');
+      }
+
+      // Migrate 'completed' to 'done'
+      final completedUpdate = await _supabase
+          .from(SupabaseConfig.queueEntriesTable)
+          .update({SupabaseConfig.statusColumn: 'done'})
+          .eq(SupabaseConfig.statusColumn, 'completed')
+          .select();
+      if (completedUpdate.isNotEmpty) {
+        print('✅ Migrated ${completedUpdate.length} records from "completed" to "done"');
+      }
+      
+      print('🏁 Status migration check complete');
+    } catch (e) {
+      print('❌ Status migration error: $e');
+    }
   }
 
   Future<void> _loadCurrentBatchNumber() async {
@@ -554,14 +594,13 @@ class SupabaseService {
     }
   }
 
-  // Stop countdown and mark as completed
+  // Stop countdown but keep status as current
   Future<bool> stopCountdown(String id) async {
     try {
       await _supabase
           .from(SupabaseConfig.queueEntriesTable)
           .update({
             SupabaseConfig.countdownStartColumn: null,
-            SupabaseConfig.statusColumn: SupabaseConfig.statusCompleted,
           })
           .eq(SupabaseConfig.idColumn, id);
 
@@ -664,11 +703,11 @@ class SupabaseService {
     }
   }
 
-  // Check and handle expired countdowns - automatically mark as completed and remove
+  // Check and handle expired countdowns - automatically mark as incomplete
   Future<void> checkExpiredCountdowns() async {
     try {
       final now = DateTime.now().toUtc();
-      final thirtySecondsAgo = now.subtract(const Duration(seconds: 30));
+      final thirtySecondsAgo = now.subtract(const Duration(seconds: 35)); // Give a small buffer
 
       // Find all serving entries with expired countdowns
       final response = await _supabase
@@ -685,17 +724,10 @@ class SupabaseService {
         final queueNumber = entry[SupabaseConfig.queueNumberColumn];
         final department = entry[SupabaseConfig.departmentColumn];
 
-        // First mark as missed for tracking
+        // Mark as incomplete
         await markAsMissed(entryId);
         print(
-          'Auto-marked expired countdown for entry: $entryId (Queue #$queueNumber, $department)',
-        );
-
-        // Then automatically mark as completed after a short delay
-        await Future.delayed(const Duration(seconds: 2));
-        await completeQueueEntry(entryId);
-        print(
-          'Auto-completed missed entry: $entryId (Queue #$queueNumber, $department)',
+          'Auto-marked expired countdown for entry: $entryId (Queue #$queueNumber, $department) as incomplete',
         );
       }
     } catch (e) {
@@ -709,25 +741,17 @@ class SupabaseService {
   // Immediately remove missed entries from live queue
   Future<void> removeMissedEntriesFromLiveQueue() async {
     try {
-      // Get all missed entries
-      final response = await _supabase
+      // We don't need to change status to 'done' anymore, because our 
+      // active queue fetchers already exclude 'incomplete' status.
+      // This method now only ensures 'missed' labels are migrated to 'incomplete'.
+      await _supabase
           .from(SupabaseConfig.queueEntriesTable)
-          .select()
-          .eq(SupabaseConfig.statusColumn, SupabaseConfig.statusMissed);
+          .update({SupabaseConfig.statusColumn: 'incomplete'})
+          .eq(SupabaseConfig.statusColumn, 'missed');
 
-      for (final entry in response) {
-        final entryId = entry[SupabaseConfig.idColumn];
-        final queueNumber = entry[SupabaseConfig.queueNumberColumn];
-        final department = entry[SupabaseConfig.departmentColumn];
-
-        // Mark as completed to remove from live queue
-        await completeQueueEntry(entryId);
-        print(
-          'Removed missed entry from live queue: $entryId (Queue #$queueNumber, $department)',
-        );
-      }
+      print('Live queue cleanup: Migrated any legacy missed statuses');
     } catch (e) {
-      print('Error removing missed entries from live queue: $e');
+      print('Error cleaning up live queue: $e');
     }
   }
 
@@ -824,11 +848,10 @@ class SupabaseService {
 
   Future<Map<String, int>> getQueueStatistics() async {
     try {
+      // Return counts per department for waiting status
       final response = await _supabase
           .from(SupabaseConfig.queueEntriesTable)
-          .select(
-            '${SupabaseConfig.departmentColumn}, ${SupabaseConfig.statusColumn}',
-          )
+          .select(SupabaseConfig.departmentColumn)
           .eq(SupabaseConfig.statusColumn, SupabaseConfig.statusWaiting);
 
       final Map<String, int> stats = {};
@@ -850,56 +873,53 @@ class SupabaseService {
     String department,
   ) async {
     try {
+      // Optimized: Only fetch the status column to count
       final response = await _supabase
           .from(SupabaseConfig.queueEntriesTable)
-          .select()
+          .select(SupabaseConfig.statusColumn)
           .eq(SupabaseConfig.departmentColumn, department);
 
-      final Map<String, int> statusCounts = {};
       int totalWaiting = 0;
       int totalServing = 0;
       int totalCompleted = 0;
-      int totalMissed = 0;
+      int totalIncomplete = 0;
 
       for (final entry in response) {
-        final status = entry[SupabaseConfig.statusColumn];
-        if (status != null) {
-          statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+        final String? status = entry[SupabaseConfig.statusColumn];
+        if (status == null) continue;
 
-          switch (status) {
-            case 'waiting':
-              totalWaiting++;
-              break;
-            case 'serving':
-              totalServing++;
-              break;
-            case 'completed':
-              totalCompleted++;
-              break;
-            case 'missed':
-              totalMissed++;
-              break;
-          }
+        if (status == SupabaseConfig.statusWaiting) {
+          totalWaiting++;
+        } else if (status == SupabaseConfig.statusServing || status == 'serving') {
+          totalServing++;
+        } else if (status == SupabaseConfig.statusCompleted || status == 'done' || status == 'completed') {
+          totalCompleted++;
+        } else if (status == SupabaseConfig.statusMissed || status == 'incomplete' || status == 'missed') {
+          totalIncomplete++;
         }
       }
 
       return {
         'department': department,
+        'total': response.length,
         'total_entries': response.length,
         'waiting': totalWaiting,
-        'serving': totalServing,
+        'current': totalServing,
         'completed': totalCompleted,
-        'missed': totalMissed,
+        'incomplete': totalIncomplete,
+        'missed': totalIncomplete, // Maintain backward compatibility
         'next_queue_number': await _getNextQueueNumberForCurrentBatch(),
       };
     } catch (e) {
       print('Error getting department queue statistics: $e');
       return {
         'department': department,
+        'total': 0,
         'total_entries': 0,
         'waiting': 0,
         'serving': 0,
         'completed': 0,
+        'incomplete': 0,
         'missed': 0,
         'next_queue_number': 1,
       };

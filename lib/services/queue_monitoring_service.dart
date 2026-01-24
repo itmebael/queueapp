@@ -12,7 +12,7 @@ class QueueMonitoringService {
   final EmailService _emailService = EmailService();
   
   Timer? _monitoringTimer;
-  Map<String, Set<String>> _notifiedUsers = {}; // department -> set of user IDs
+  final Map<String, Set<String>> _notifiedUsers = {}; // department -> set of user IDs
   
   // Start monitoring queue positions for all departments
   void startMonitoring() {

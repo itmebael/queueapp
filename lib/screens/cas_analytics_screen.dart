@@ -297,10 +297,10 @@ class _CASAnalyticsScreenState extends State<CASAnalyticsScreen>
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
-                  BoxShadow(
+                  const BoxShadow(
                     color: Colors.white,
                     blurRadius: 10,
-                    offset: const Offset(-5, -5),
+                    offset: Offset(-5, -5),
                   ),
                 ],
               ),
@@ -524,6 +524,7 @@ class _CASAnalyticsScreenState extends State<CASAnalyticsScreen>
       case 'completed':
       case 'done':
         return const Color(0xFF10B981);
+      case 'incomplete':
       case 'missed':
         return const Color(0xFFEF4444);
       default:
@@ -541,6 +542,7 @@ class _CASAnalyticsScreenState extends State<CASAnalyticsScreen>
       case 'completed':
       case 'done':
         return Icons.check_circle_rounded;
+      case 'incomplete':
       case 'missed':
         return Icons.cancel_rounded;
       default:
