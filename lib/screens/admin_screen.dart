@@ -529,15 +529,6 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
         );
 
-        try {
-          await _bluetoothTtsService.announceIncomplete(
-            current.department,
-            current.queueNumber.toString().padLeft(3, '0'),
-          );
-        } catch (e) {
-          print('TTS incomplete announcement failed: $e');
-        }
-
         await _loadDepartmentData();
       }
     } catch (e) {
@@ -582,15 +573,6 @@ class _AdminScreenState extends State<AdminScreen> {
             ),
           ),
         );
-
-        try {
-          await _bluetoothTtsService.announceCompletion(
-            current.department,
-            current.queueNumber.toString().padLeft(3, '0'),
-          );
-        } catch (e) {
-          print('TTS completion announcement failed: $e');
-        }
 
         // Reload department data to get updated queue
         await _loadDepartmentData();
@@ -1193,16 +1175,6 @@ class _AdminScreenState extends State<AdminScreen> {
                     // Automatically mark as incomplete in the database
                     await _supabaseService.markAsMissed(person.id);
                     
-                    // Announce incomplete via voice
-                    try {
-                      await _bluetoothTtsService.announceIncomplete(
-                        person.department,
-                        person.queueNumber.toString().padLeft(3, '0'),
-                      );
-                    } catch (ttsError) {
-                      debugPrint('TTS incomplete announcement failed: $ttsError');
-                    }
-
                     // Reload the queue to move to the next person
                     await _loadDepartmentData();
                   } catch (e) {
@@ -1838,21 +1810,6 @@ class _AdminScreenState extends State<AdminScreen> {
                                   await _supabaseService.markAsMissed(
                                     person.id,
                                   );
-
-                                  // Announce incomplete via voice
-                                  try {
-                                    await _bluetoothTtsService.announceIncomplete(
-                                      person.department,
-                                      person.queueNumber.toString().padLeft(
-                                        3,
-                                        '0',
-                                      ),
-                                    );
-                                  } catch (ttsError) {
-                                    debugPrint(
-                                      'TTS incomplete announcement failed: $ttsError',
-                                    );
-                                  }
 
                                   // Reload the queue to move to the next person
                                   await _loadDepartmentData();

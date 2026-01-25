@@ -27,6 +27,19 @@ class PurposeService {
     try {
       _purposes = await _supabaseService.getAllPurposes();
       print('Loaded ${_purposes.length} purposes from database');
+
+      // Ensure 'Releasing' exists in the list (fallback/default)
+      if (!_purposes.any((p) => p.name.toUpperCase() == 'RELEASING')) {
+        _purposes.add(Purpose(
+          id: 'temp_releasing',
+          name: 'Releasing',
+          description: 'Releasing of documents',
+          isActive: true,
+          createdAt: DateTime.now(),
+        ));
+        // Re-sort alphabetically
+        _purposes.sort((a, b) => a.name.compareTo(b.name));
+      }
     } catch (e) {
       print('Error loading purposes from database: $e');
       // Fallback to empty list if database fails

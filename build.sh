@@ -25,6 +25,6 @@ flutter pub get
 
 # Build web app
 echo "Building Flutter web app..."
-flutter build web --web-renderer canvaskit
+flutter build web --web-renderer auto --release
 
 echo "Build completed successfully!"

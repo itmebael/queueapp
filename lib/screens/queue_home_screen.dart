@@ -546,7 +546,7 @@ class _QueueHomeScreenState extends State<QueueHomeScreen>
                                   ),
                                   const SizedBox(height: 10),
                                   Text(
-                                    'Releasing',
+                                    'For Releasing',
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleMedium

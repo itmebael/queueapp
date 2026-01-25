@@ -74,7 +74,20 @@
   <div class="loading-container">
     <div class="loader"></div>
     <div class="loading-text">Loading SSU Queue System...</div>
+    <div id="loading-error" style="display: none; color: red; margin-top: 20px;">
+      Taking longer than expected... <br>
+      Please try refreshing the page.
+    </div>
   </div>
+  <script>
+    setTimeout(function() {
+      var loader = document.querySelector('.loading-text');
+      var error = document.getElementById('loading-error');
+      if (loader && error) {
+        error.style.display = 'block';
+      }
+    }, 10000); // Show error after 10 seconds
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

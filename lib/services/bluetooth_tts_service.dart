@@ -338,7 +338,8 @@ class BluetoothTtsService {
         }
       }
       
-      debugPrint('No Bluetooth device connected for $department - next in queue announcement skipped');
+      debugPrint('No Bluetooth device connected for $department - falling back to local TTS');
+      await _speakWithTts(message);
     } catch (e) {
       print('Error announcing queue number for $department: $e');
     }
@@ -389,7 +390,8 @@ class BluetoothTtsService {
         }
       }
       
-      debugPrint('No Bluetooth device connected for $department - announcement skipped');
+      debugPrint('No Bluetooth device connected for $department - falling back to local TTS');
+      await _speakWithTts(message);
     } catch (e) {
       print('Error announcing department start for $department: $e');
     }
@@ -436,7 +438,8 @@ class BluetoothTtsService {
         }
       }
       
-      debugPrint('No Bluetooth device connected for $department - calling announcement skipped');
+      debugPrint('No Bluetooth device connected for $department - falling back to local TTS');
+      await _speakWithTts(message);
     } catch (e) {
       print('Error announcing calling for $department: $e');
     }

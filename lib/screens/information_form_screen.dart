@@ -1917,7 +1917,7 @@ class _InformationFormScreenState extends State<InformationFormScreen>
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              'Priority Queue',
+                                              'Priority Queue(Prepare your PWD ID and Senior Citizen ID for verification.)',
                                               style: TextStyle(
                                                 fontWeight: FontWeight.w600,
                                                 color: Colors.green.shade700,
@@ -1934,14 +1934,7 @@ class _InformationFormScreenState extends State<InformationFormScreen>
                                             fontSize: 15,
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Prepare your PWD ID and Senior Citizen ID for verification.',
-                                          style: TextStyle(
-                                            color: Colors.green.shade700,
-                                            fontSize: 14,
-                                          ),
-                                        ),
+                                    
                                         const SizedBox(height: 10),
 
                                         // PWD Checkbox

@@ -29,6 +29,7 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
   final BluetoothTtsService _bluetoothTtsService = BluetoothTtsService();
   List<String> _departments = [];
   final Map<String, List<QueueEntry>> _departmentQueues = {};
+  final Map<String, int> _departmentCounts = {};
   Timer? _countdownTimer;
   Timer? _autoRefreshTimer;
   RealtimeChannel? _queueChannel;
@@ -245,10 +246,49 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
           final entries = await _supabaseService
               .getTop12ActiveQueueEntriesByDepartment(department);
 
+          final totalCount = await _supabaseService.getActiveQueueCount(department);
+
           final firstEntry = entries.isNotEmpty ? entries.first : null;
+          final previousFirst = _previousFirstEntries[department];
+
+          // Check for announcement triggers
+          if (firstEntry != null) {
+            // Case 1: Status is 'current' (Calling)
+            if (firstEntry.status == 'current') {
+              // Announce if:
+              // - No previous entry (first load/refresh)
+              // - Different person than before
+              // - Same person but status changed to 'current'
+              if (previousFirst == null || 
+                  previousFirst.id != firstEntry.id || 
+                  previousFirst.status != 'current') {
+                debugPrint('Announcing CALLING for ${firstEntry.queueNumber} in $department');
+                _bluetoothTtsService.announceCalling(
+                  department, 
+                  firstEntry.queueNumber, 
+                  name: firstEntry.name
+                );
+              }
+            } 
+            // Case 2: Status is 'waiting' (Next in line)
+            else if (firstEntry.status == 'waiting') {
+               // Announce if:
+               // - Different person than before (new person reached top)
+               // - We don't announce on first load (previousFirst == null) to avoid noise
+               if (previousFirst != null && previousFirst.id != firstEntry.id) {
+                 debugPrint('Announcing NEXT for ${firstEntry.queueNumber} in $department');
+                 _bluetoothTtsService.announceQueueNumber(
+                   department, 
+                   firstEntry.queueNumber, 
+                   name: firstEntry.name
+                 );
+               }
+            }
+          }
           
           // Check for changes
-          if (_departmentQueues[department]?.length != entries.length) {
+          if (_departmentQueues[department]?.length != entries.length ||
+              _departmentCounts[department] != totalCount) {
             hasChanges = true;
           } else {
              // Deep check if needed, or just assume if length is same and first entry is same
@@ -263,9 +303,11 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
 
           _previousFirstEntries[department] = firstEntry;
           _departmentQueues[department] = entries;
+          _departmentCounts[department] = totalCount;
         } catch (deptError) {
           debugPrint('Error loading queue data for department $department: $deptError');
           _departmentQueues[department] = [];
+          _departmentCounts[department] = 0;
         }
       }
       
@@ -366,7 +408,7 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          '${entries.length}',
+                          '${_departmentCounts[department] ?? 0}',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: Colors.white,

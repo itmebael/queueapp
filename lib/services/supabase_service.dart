@@ -7,7 +7,7 @@ import '../models/department.dart';
 import '../models/purpose.dart';
 import '../models/course.dart';
 import 'email_service.dart';
-import 'tts_service.dart';
+import 'bluetooth_tts_service.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -337,6 +337,24 @@ class SupabaseService {
     }
   }
 
+  // Get total active queue count for a department (Waiting + Serving)
+  Future<int> getActiveQueueCount(String department) async {
+    try {
+      final response = await _supabase
+          .from(SupabaseConfig.queueEntriesTable)
+          .select('id')
+          .eq(SupabaseConfig.departmentColumn, department)
+          .or(
+            '${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusWaiting},${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusServing}',
+          );
+      
+      return (response as List).length;
+    } catch (e) {
+      print('Error getting active queue count for $department: $e');
+      return 0;
+    }
+  }
+
   // Get top 4 active queue entries for live display (2x2 grid)
   Future<List<QueueEntry>> getTop4ActiveQueueEntriesByDepartment(
     String department,
@@ -603,8 +621,12 @@ class SupabaseService {
       
       // Announce that user is being called
       try {
-        final ttsService = TtsService();
-        await ttsService.speak('${entry.name}, queue number ${entry.queueNumber}, please proceed to the ${entry.department} counter.');
+        final bluetoothTtsService = BluetoothTtsService();
+        await bluetoothTtsService.announceCalling(
+          entry.department,
+          entry.queueNumber,
+          name: entry.name,
+        );
       } catch (ttsError) {
         print('TTS announcement failed: $ttsError');
       }
@@ -636,6 +658,15 @@ class SupabaseService {
   // Mark as missed (countdown expired)
   Future<bool> markAsMissed(String id) async {
     try {
+      // Get the entry details before marking as missed
+      final response = await _supabase
+          .from(SupabaseConfig.queueEntriesTable)
+          .select()
+          .eq(SupabaseConfig.idColumn, id)
+          .single();
+      
+      final entry = QueueEntry.fromJson(response);
+
       await _supabase
           .from(SupabaseConfig.queueEntriesTable)
           .update({
@@ -644,6 +675,18 @@ class SupabaseService {
             SupabaseConfig.countdownDurationColumn: 30,
           })
           .eq(SupabaseConfig.idColumn, id);
+      
+      // Announce incomplete via TTS
+      try {
+        final bluetoothTtsService = BluetoothTtsService();
+        await bluetoothTtsService.announceIncomplete(
+          entry.department,
+          entry.queueNumber.toString().padLeft(3, '0'),
+        );
+      } catch (ttsError) {
+        print('TTS incomplete announcement failed: $ttsError');
+      }
+
       return true;
     } catch (e) {
       print('Error marking as missed: $e');
@@ -814,8 +857,11 @@ class SupabaseService {
       if (success) {
         // Announce completion via TTS
         try {
-          final ttsService = TtsService();
-          await ttsService.announceQueueCompletion(entry.name, entry.department);
+          final bluetoothTtsService = BluetoothTtsService();
+          await bluetoothTtsService.announceCompletion(
+            entry.department,
+            entry.queueNumber.toString(),
+          );
         } catch (ttsError) {
           print('TTS announcement failed: $ttsError');
         }
