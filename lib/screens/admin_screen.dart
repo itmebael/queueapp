@@ -1311,19 +1311,6 @@ class _AdminScreenState extends State<AdminScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: !_isLoading ? _resetQueue : null,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Reset Queue'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
             ],
           ],
         ],
@@ -1680,15 +1667,16 @@ class _AdminScreenState extends State<AdminScreen> {
                     ),
                   );
                 }),
-              _buildMenuItem(Icons.label_rounded, 'Purposes', false, () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        PurposeManagementScreen(adminUser: currentAdmin),
-                  ),
-                );
-              }),
+              if (_adminService.isMasterAdmin)
+                _buildMenuItem(Icons.label_rounded, 'Purposes', false, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          PurposeManagementScreen(adminUser: currentAdmin),
+                    ),
+                  );
+                }),
               const Spacer(),
               Container(
                 margin: const EdgeInsets.all(16),
@@ -1929,16 +1917,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 16),
-                                ElevatedButton.icon(
-                                  onPressed: !_isLoading ? _resetQueue : null,
-                                  icon: const Icon(Icons.refresh_rounded),
-                                  label: const Text('Reset Queue'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                ),
+
                               ],
                             ],
                           ],
