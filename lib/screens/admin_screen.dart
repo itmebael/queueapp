@@ -11,10 +11,8 @@ import 'purpose_management_screen.dart';
 import 'course_management_screen.dart';
 import 'records_view_screen.dart';
 import '../services/department_service.dart';
-import '../services/purpose_service.dart';
 import '../models/department.dart';
 import '../services/queue_monitoring_service.dart';
-import '../services/bluetooth_tts_service.dart';
 import '../widgets/countdown_timer.dart';
 
 class AdminScreen extends StatefulWidget {
@@ -36,15 +34,11 @@ class _AdminScreenState extends State<AdminScreen> {
   bool _showDashboard = true; // Show dashboard by default
   List<Department> _allDepartments = [];
   Map<String, Map<String, int>> _departmentStats = {};
-  List<Map<String, dynamic>> _purposeStatsByDeptCourse = [];
-  List<QueueEntry> _allQueueEntries = [];
 
   final SupabaseService _supabaseService = SupabaseService();
   final DepartmentService _departmentService = DepartmentService();
-  final PurposeService _purposeService = PurposeService();
   final AdminService _adminService = AdminService();
   final QueueMonitoringService _queueMonitoringService = QueueMonitoringService();
-  final BluetoothTtsService _bluetoothTtsService = BluetoothTtsService();
 
   @override
   void initState() {
@@ -194,12 +188,6 @@ class _AdminScreenState extends State<AdminScreen> {
       // Load all departments for dashboard
       await _loadAllDepartments();
       
-      // If master admin, load purposes statistics
-      if (loggedInAdmin.department == 'ALL') {
-        await _loadPurposeStatistics();
-        await _loadAllQueueEntries();
-      }
-      
       // If not master admin, load department-specific queue data
       if (loggedInAdmin.department != 'ALL') {
         await _loadDepartmentData();
@@ -257,86 +245,6 @@ class _AdminScreenState extends State<AdminScreen> {
       });
     } catch (e) {
       print('Error loading department statistics: $e');
-    }
-  }
-
-  Future<void> _loadPurposeStatistics() async {
-    try {
-      // Get all queue entries
-      final allEntries = await _supabaseService.getAllQueueEntries();
-      
-      // Group by department and course, then count purposes
-      final Map<String, Map<String, Map<String, int>>> grouped = {};
-      
-      for (final entry in allEntries) {
-        final dept = entry.department;
-        final course = entry.course ?? 'N/A';
-        final purpose = entry.purpose;
-        
-        if (!grouped.containsKey(dept)) {
-          grouped[dept] = {};
-        }
-        if (!grouped[dept]!.containsKey(course)) {
-          grouped[dept]![course] = {};
-        }
-        grouped[dept]![course]![purpose] = 
-            (grouped[dept]![course]![purpose] ?? 0) + 1;
-      }
-      
-      // Convert to list format for display
-      final List<Map<String, dynamic>> statsList = [];
-      for (final deptEntry in grouped.entries) {
-        final dept = deptEntry.key;
-        final deptName = _departmentService.getDepartmentByCode(dept)?.name ?? dept;
-        
-        for (final courseEntry in deptEntry.value.entries) {
-          final course = courseEntry.key;
-          final purposes = courseEntry.value;
-          
-          // Find the purpose with highest count
-          String topPurpose = '';
-          int topCount = 0;
-          int totalCount = 0;
-          
-          for (final purposeEntry in purposes.entries) {
-            totalCount += purposeEntry.value;
-            if (purposeEntry.value > topCount) {
-              topCount = purposeEntry.value;
-              topPurpose = purposeEntry.key;
-            }
-          }
-          
-          statsList.add({
-            'department': dept,
-            'departmentName': deptName,
-            'course': course,
-            'topPurpose': topPurpose,
-            'topCount': topCount,
-            'totalCount': totalCount,
-            'allPurposes': purposes,
-          });
-        }
-      }
-      
-      // Sort by total count descending
-      statsList.sort((a, b) => (b['totalCount'] as int).compareTo(a['totalCount'] as int));
-      
-      setState(() {
-        _purposeStatsByDeptCourse = statsList;
-      });
-    } catch (e) {
-      print('Error loading purpose statistics: $e');
-    }
-  }
-
-  Future<void> _loadAllQueueEntries() async {
-    try {
-      final entries = await _supabaseService.getAllQueueEntries();
-      setState(() {
-        _allQueueEntries = entries;
-      });
-    } catch (e) {
-      print('Error loading all queue entries: $e');
     }
   }
 
@@ -680,95 +588,6 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
     );
   }
-
-
-  Future<void> _deletePurposeFromOverview(String purposeName) async {
-    try {
-      // Show confirmation dialog
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Delete Purpose'),
-          content: Text(
-            'Are you sure you want to delete the purpose "$purposeName"?\n\n'
-            'This will mark the purpose as inactive. It will no longer appear in the purpose list, '
-            'but existing queue entries with this purpose will remain.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
-              child: const Text('Delete'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmed != true) {
-        return;
-      }
-
-      // Get the purpose by name to get its ID
-      final purpose = _purposeService.getPurposeByName(purposeName);
-      if (purpose == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Purpose "$purposeName" not found'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // Delete the purpose
-      setState(() {
-        _isLoading = true;
-      });
-
-      final success = await _purposeService.deletePurpose(purpose.id);
-      
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Purpose deleted successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
-        // Reload purpose statistics to reflect the changes
-        await _loadPurposeStatistics();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to delete purpose'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      print('Error deleting purpose: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error deleting purpose: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-
   @override
   Widget build(BuildContext context) {
     if (_currentAdmin == null) {

@@ -313,11 +313,11 @@ class _QueueHomeScreenState extends State<QueueHomeScreen>
             Container(
               height: 4,
               width: double.infinity,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [const Color(0xFF263277), const Color(0xFF4A90E2)],
+                  colors: [Color(0xFF263277), Color(0xFF4A90E2)],
                 ),
-                borderRadius: const BorderRadius.vertical(
+                borderRadius: BorderRadius.vertical(
                   top: Radius.circular(2),
                 ),
               ),

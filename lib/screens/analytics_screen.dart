@@ -272,6 +272,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     
                     // Master Admin Charts Only
                     if (isMasterAdmin) ...[
+                      _buildDepartmentPerformanceChart(snapshot.data ?? {}),
+                      const SizedBox(height: 20),
+                      _buildTopCoursesChart(snapshot.data ?? {}),
+                      const SizedBox(height: 20),
                       // Students List Section (Enhanced)
                       _buildEnhancedStudentsList(),
                     ] else ...[
@@ -1312,9 +1316,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildQueueStatusChart(Map<String, dynamic> data) {
     final statusCounts = <String, int>{};
     for (final entry in _allQueueEntries) {
-      statusCounts[entry.status] = (statusCounts[entry.status] ?? 0) + 1;
+      final statusKey = _normalizeStatusForChart(entry.status);
+      statusCounts[statusKey] = (statusCounts[statusKey] ?? 0) + 1;
     }
 
+    if (statusCounts.isEmpty) {
+      return _buildEmptyChart('Queue Status', 'No queue status data available');
+    }
+
+    final orderedStatuses = statusCounts.keys.toList()
+      ..sort((a, b) => _getStatusSortOrder(a).compareTo(_getStatusSortOrder(b)));
     final total = statusCounts.values.fold(0, (sum, count) => sum + count);
     final colors = {
       'waiting': const Color(0xFFF59E0B),
@@ -1370,22 +1381,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     touchCallback: (FlTouchEvent event, pieTouchResponse) {
                       if (event is FlTapUpEvent && pieTouchResponse?.touchedSection != null) {
                         final sectionIndex = pieTouchResponse!.touchedSection!.touchedSectionIndex;
-                        final statusEntry = statusCounts.entries.elementAt(sectionIndex);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${statusEntry.key.toUpperCase()}: ${statusEntry.value} students'),
-                            duration: const Duration(seconds: 2),
-                            backgroundColor: colors[statusEntry.key] ?? Colors.grey,
-                          ),
+                        final statusKey = orderedStatuses[sectionIndex];
+                        _showStatusDetailsBottomSheet(
+                          statusKey,
+                          colors[statusKey] ?? Colors.grey,
                         );
                       }
                     },
                   ),
-                  sections: statusCounts.entries.map((entry) {
-                    final color = colors[entry.key] ?? Colors.grey;
-                    final percentage = total > 0 ? (entry.value / total * 100).round() : 0;
+                  sections: orderedStatuses.map((statusKey) {
+                    final count = statusCounts[statusKey] ?? 0;
+                    final color = colors[statusKey] ?? Colors.grey;
+                    final percentage = total > 0 ? (count / total * 100).round() : 0;
                     return PieChartSectionData(
-                      value: entry.value.toDouble(),
+                      value: count.toDouble(),
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -1425,7 +1434,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           ],
                         ),
                         child: Icon(
-                          _getStatusIcon(entry.key),
+                          _getStatusIcon(statusKey),
                           color: color,
                           size: 16,
                         ),
@@ -1444,18 +1453,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           Wrap(
             spacing: 16,
             runSpacing: 8,
-            children: statusCounts.entries.map((entry) {
-              final color = colors[entry.key] ?? Colors.grey;
-              final percentage = total > 0 ? (entry.value / total * 100).round() : 0;
+            children: orderedStatuses.map((statusKey) {
+              final count = statusCounts[statusKey] ?? 0;
+              final color = colors[statusKey] ?? Colors.grey;
+              final percentage = total > 0 ? (count / total * 100).round() : 0;
               return GestureDetector(
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('${entry.key.toUpperCase()}: ${entry.value} students'),
-                      duration: const Duration(seconds: 2),
-                      backgroundColor: color,
-                    ),
-                  );
+                  _showStatusDetailsBottomSheet(statusKey, color);
                 },
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1470,7 +1474,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '${entry.key.toUpperCase()} ($percentage%)',
+                      '${_getStatusDisplayName(statusKey)} ($percentage%)',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1484,9 +1488,341 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               );
             }).toList(),
           ),
+          const SizedBox(height: 12),
+          Text(
+            'Tap a slice to view student gender and school ID details.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  void _showStatusDetailsBottomSheet(String statusKey, Color accentColor) {
+    final entries = _allQueueEntries
+        .where((entry) => _normalizeStatusForChart(entry.status) == statusKey)
+        .toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.62,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: accentColor.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                _getStatusIcon(statusKey),
+                                color: accentColor,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${_getStatusDisplayName(statusKey)} Students',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${entries.length} student${entries.length == 1 ? '' : 's'} with gender and school ID details',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: entries.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                'No students found for this status.',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            controller: scrollController,
+                            padding: const EdgeInsets.all(20),
+                            itemCount: entries.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final entry = entries[index];
+                              return Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: Colors.grey.shade200),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            entry.name,
+                                            style: const TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: accentColor.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            'Q#${entry.queueNumber.toString().padLeft(3, '0')}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: accentColor,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.badge_rounded,
+                                          size: 16,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'School ID: ${entry.ssuId}',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey.shade800,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.person_outline_rounded,
+                                          size: 16,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Gender: ${_formatGender(entry.gender)}',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey.shade800,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        _buildStatusDetailChip(
+                                          icon: Icons.apartment_rounded,
+                                          label: entry.department,
+                                        ),
+                                        if (entry.course != null &&
+                                            entry.course!.isNotEmpty)
+                                          _buildStatusDetailChip(
+                                            icon: Icons.school_rounded,
+                                            label: entry.course!,
+                                          ),
+                                        _buildStatusDetailChip(
+                                          icon: Icons.access_time_rounded,
+                                          label: _formatTime(entry.timestamp),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusDetailChip({
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: Colors.grey.shade700,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade800,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _normalizeStatusForChart(String status) {
+    switch (status.trim().toLowerCase()) {
+      case 'current':
+      case 'serving':
+        return 'current';
+      case 'completed':
+      case 'done':
+        return 'completed';
+      case 'incomplete':
+      case 'missed':
+        return 'missed';
+      case 'waiting':
+      case '':
+        return 'waiting';
+      default:
+        return status.trim().toLowerCase();
+    }
+  }
+
+  String _getStatusDisplayName(String status) {
+    switch (_normalizeStatusForChart(status)) {
+      case 'current':
+        return 'Serving';
+      case 'completed':
+        return 'Completed';
+      case 'missed':
+        return 'Missed';
+      case 'waiting':
+        return 'Waiting';
+      default:
+        final normalized = _normalizeStatusForChart(status);
+        if (normalized.isEmpty) return 'Waiting';
+        return normalized
+            .split('_')
+            .where((part) => part.isNotEmpty)
+            .map(
+              (part) =>
+                  '${part[0].toUpperCase()}${part.length > 1 ? part.substring(1) : ''}',
+            )
+            .join(' ');
+    }
+  }
+
+  int _getStatusSortOrder(String status) {
+    switch (_normalizeStatusForChart(status)) {
+      case 'waiting':
+        return 0;
+      case 'current':
+        return 1;
+      case 'completed':
+        return 2;
+      case 'missed':
+        return 3;
+      default:
+        return 99;
+    }
+  }
+
+  String _formatGender(String? gender) {
+    final trimmed = gender?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return 'Not provided';
+    }
+    return trimmed;
   }
 
   Widget _buildRecentActivityTimeline() {
